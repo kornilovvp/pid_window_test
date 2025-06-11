@@ -1,32 +1,76 @@
 # pid_worker.py
 
-# These module-level variables will store the last known input coordinates (e.g., from the green circle)
-# They are updated by the PID_UPDATE function.
-X_current = 0
-Y_current = 0
 
-# Default/target coordinates that PID_UPDATE will return for the blue circle.
-# As per the request, these are fixed values for now.
-BLUE_CIRCLE_TARGET_X = 450
-BLUE_CIRCLE_TARGET_Y = 580
+# Default target setpoint for the blue circle.
+DEF_TARGET_X = 333
+DEF_TARGET_Y  = 580
 
-def PID_UPDATE(input_x, input_y):
-    """
-    Updates internal 'current' X, Y based on the input coordinates.
-    Returns target X, Y coordinates for the blue circle.
 
-    Args:
-        input_x (int): The X coordinate from the input (e.g., green circle's center).
-        input_y (int): The Y coordinate from the input (e.g., green circle's center).
+x_current = 0
+y_current = 0
 
-    Returns:
-        tuple: (int, int) representing the target X, Y for the blue circle.
-    """
-    global X_current, Y_current
-    X_current = input_x
-    Y_current = input_y
+x_target = DEF_TARGET_X
+y_target = DEF_TARGET_Y
 
-    # For now, this function returns fixed target values for the blue circle.
-    # In a more complex PID system, these returned values would be calculated
-    # based on X_current, Y_current, a setpoint, and PID logic.
-    return BLUE_CIRCLE_TARGET_X, BLUE_CIRCLE_TARGET_Y
+x_return = 0
+y_return = 0
+
+x_error = 0
+y_error = 0
+
+
+
+pid_coff_t_scale = 1
+pid_coeff_p = 0.03
+pid_coeff_i = 1
+
+
+
+def PID_UPDATE(x_cur, y_cur, x_tar, y_tar):
+
+    global x_current, y_current, x_target, y_target, x_error, y_error, x_return, y_return
+    global pid_coff_t_scale, pid_coeff_p, pid_coeff_i
+
+
+    x_current = x_cur  
+    y_current = y_cur 
+    
+    x_target = x_tar
+    y_target = y_tar
+
+    x_error = x_tar - x_cur
+    y_error = y_tar - y_cur
+
+
+    x_return = x_current + (x_error * pid_coeff_p) * pid_coff_t_scale
+
+    y_return = y_current + (y_error * pid_coeff_p) * pid_coff_t_scale
+
+
+    '''
+    # Calculate x_resp (intended next position or adjustment)
+    if x_cur > x_tar:
+        x_resp_calculated =  x_cur - 1
+    elif x_cur < x_tar:
+        x_resp_calculated = x_cur + 1
+    else: # x_cur == x_tar
+        x_resp_calculated = x_cur # or x_tar, they are equal
+    x_resp = x_resp_calculated
+
+    # Calculate y_resp symmetrically
+    if y_cur > y_tar:
+        y_resp_calculated = y_cur - 1
+    elif y_cur < y_tar:
+        y_resp_calculated = y_cur + 1
+    else: # y_cur == y_tar
+        y_resp_calculated = y_cur # or y_tar, they are equal
+    y_resp = y_resp_calculated
+    '''
+
+    return x_return, y_return
+
+def PID_GET_ERROR():
+
+    global x_error, y_error
+
+    return x_error, y_error

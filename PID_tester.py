@@ -1,5 +1,5 @@
 import tkinter as tk
-from pid_worker import PID_UPDATE # Import the new function
+from pid_worker import PID_UPDATE, PID_GET_ERROR # Import the new functions
 
 class MovableCirclesApp:
     def __init__(self, master):
@@ -20,6 +20,7 @@ class MovableCirclesApp:
         # StringVars for coordinate labels
         self.green_coord_var = tk.StringVar()
         self.blue_coord_var = tk.StringVar()
+        self.error_coord_var = tk.StringVar() # For X_err, Y_err
 
         # Create and place coordinate labels at the top of the main window
         green_label = tk.Label(master, textvariable=self.green_coord_var, font=("Arial", 10))
@@ -27,6 +28,9 @@ class MovableCirclesApp:
 
         blue_label = tk.Label(master, textvariable=self.blue_coord_var, font=("Arial", 10))
         blue_label.place(x=10, y=35)  # Position below the green label
+
+        error_label = tk.Label(master, textvariable=self.error_coord_var, font=("Arial", 10))
+        error_label.place(x=10, y=60) # Position below the blue label
 
         # Calculate padding for centering the canvas
         self.pad_x = (self.window_width - self.canvas_width) // 2
@@ -48,7 +52,7 @@ class MovableCirclesApp:
 
         # Create green circle (center of working area)
         gc_center_x = self.canvas_width / 2
-        gc_center_y = self.canvas_height / 2
+        gc_center_y = self.canvas_height / 4 # Changed: Start green circle higher
         self.green_circle = self.canvas.create_oval(
             gc_center_x - self.circle_radius, gc_center_y - self.circle_radius,
             gc_center_x + self.circle_radius, gc_center_y + self.circle_radius,
@@ -58,14 +62,16 @@ class MovableCirclesApp:
         # Get initial coordinates for the blue circle from PID_UPDATE
         # We need the green circle's initial position to pass to PID_UPDATE
         initial_gc_x, initial_gc_y = self._get_circle_center_coords(self.green_circle)
-        bc_center_x, bc_center_y = PID_UPDATE(initial_gc_x, initial_gc_y)
+        
+        # Initialize blue circle at canvas (0,0)
+        bc_center_x = 0
+        bc_center_y = 0
 
         self.blue_circle = self.canvas.create_oval(
             bc_center_x - self.circle_radius, bc_center_y - self.circle_radius,
             bc_center_x + self.circle_radius, bc_center_y + self.circle_radius,
             fill=self.blue_color, outline=self.blue_color, tags="blue_circle"
         )
-
 
         # Drag and drop state for green circle
         self._drag_data = {"x": 0, "y": 0, "item": None}
@@ -77,6 +83,10 @@ class MovableCirclesApp:
 
         # Initialize coordinate display
         self._update_coordinate_labels()
+        # Initialize error display
+        X_err, Y_err = PID_GET_ERROR()
+        self.error_coord_var.set(f"Error: X_err={X_err}  Y_err={Y_err}")
+
 
         # Start the PID update loop
         self.master.after(33, self._run_pid_loop)
@@ -99,6 +109,8 @@ class MovableCirclesApp:
         bx, by = self._get_circle_center_coords(self.blue_circle)
         self.green_coord_var.set(f"Green: X={gx}  Y={gy}")
         self.blue_coord_var.set(f"Blue:  X={bx}  Y={by}")
+        X_err, Y_err = PID_GET_ERROR()
+        self.error_coord_var.set(f"Error: X_err={X_err}  Y_err={Y_err}")
 
     def _run_pid_loop(self):
         """
@@ -108,8 +120,10 @@ class MovableCirclesApp:
         # Get current green circle coordinates
         green_x, green_y = self._get_circle_center_coords(self.green_circle)
 
+        blue_x, blue_y = self._get_circle_center_coords(self.blue_circle)
+
         # Get target blue circle coordinates from PID_UPDATE
-        new_blue_center_x, new_blue_center_y = PID_UPDATE(green_x, green_y)
+        new_blue_center_x, new_blue_center_y = PID_UPDATE(blue_x, blue_y, green_x, green_y) # Pass 4 args
 
         # Update blue circle's position on the canvas
         bx1 = new_blue_center_x - self.circle_radius
@@ -119,6 +133,10 @@ class MovableCirclesApp:
         self.canvas.coords(self.blue_circle, bx1, by1, bx2, by2)
 
         self._update_coordinate_labels() # Update displayed coordinates
+        # Update error display by calling PID_GET_ERROR
+        X_err, Y_err = PID_GET_ERROR()
+        self.error_coord_var.set(f"Error: X_err={X_err}  Y_err={Y_err}")
+
         self.master.after(33, self._run_pid_loop) # Schedule the next call
 
     def _on_green_press(self, event):
