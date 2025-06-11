@@ -1,4 +1,5 @@
 import tkinter as tk
+from pid_worker import PID_UPDATE # Import the new function
 
 class MovableCirclesApp:
     def __init__(self, master):
@@ -54,16 +55,17 @@ class MovableCirclesApp:
             fill=self.green_color, outline=self.green_color, tags="green_circle"
         )
 
-        # Create blue circle (bottom-center of working area)
-        # Its bottom edge will be at the bottom of the canvas.
-        bc_center_x = self.canvas_width / 2
-        # Center Y such that its bottom edge is at canvas_height
-        bc_center_y = self.canvas_height - self.circle_radius
+        # Get initial coordinates for the blue circle from PID_UPDATE
+        # We need the green circle's initial position to pass to PID_UPDATE
+        initial_gc_x, initial_gc_y = self._get_circle_center_coords(self.green_circle)
+        bc_center_x, bc_center_y = PID_UPDATE(initial_gc_x, initial_gc_y)
+
         self.blue_circle = self.canvas.create_oval(
             bc_center_x - self.circle_radius, bc_center_y - self.circle_radius,
             bc_center_x + self.circle_radius, bc_center_y + self.circle_radius,
             fill=self.blue_color, outline=self.blue_color, tags="blue_circle"
         )
+
 
         # Drag and drop state for green circle
         self._drag_data = {"x": 0, "y": 0, "item": None}
@@ -76,12 +78,17 @@ class MovableCirclesApp:
         # Initialize coordinate display
         self._update_coordinate_labels()
 
+        # Start the PID update loop
+        self.master.after(33, self._run_pid_loop)
+
     def _get_circle_center_coords(self, circle_id):
         """
         Calculates the center coordinates of a circle item on the canvas.
         Returns coordinates as integers, relative to the canvas.
         """
         coords = self.canvas.coords(circle_id) # (x1, y1, x2, y2)
+        if not coords: # Item might not exist or coords not yet available
+            return 0, 0 # Return a default
         center_x = (coords[0] + coords[2]) / 2
         center_y = (coords[1] + coords[3]) / 2
         return int(center_x), int(center_y)
@@ -92,6 +99,27 @@ class MovableCirclesApp:
         bx, by = self._get_circle_center_coords(self.blue_circle)
         self.green_coord_var.set(f"Green: X={gx}  Y={gy}")
         self.blue_coord_var.set(f"Blue:  X={bx}  Y={by}")
+
+    def _run_pid_loop(self):
+        """
+        This method is called periodically to update the blue circle's position
+        based on the PID_UPDATE function.
+        """
+        # Get current green circle coordinates
+        green_x, green_y = self._get_circle_center_coords(self.green_circle)
+
+        # Get target blue circle coordinates from PID_UPDATE
+        new_blue_center_x, new_blue_center_y = PID_UPDATE(green_x, green_y)
+
+        # Update blue circle's position on the canvas
+        bx1 = new_blue_center_x - self.circle_radius
+        by1 = new_blue_center_y - self.circle_radius
+        bx2 = new_blue_center_x + self.circle_radius
+        by2 = new_blue_center_y + self.circle_radius
+        self.canvas.coords(self.blue_circle, bx1, by1, bx2, by2)
+
+        self._update_coordinate_labels() # Update displayed coordinates
+        self.master.after(33, self._run_pid_loop) # Schedule the next call
 
     def _on_green_press(self, event):
         """Handles mouse button press on the green circle."""
