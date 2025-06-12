@@ -26,8 +26,10 @@ pid_coff_t_scale: float = 1
 
 #proportional
 
-pid_coeff_p: float  = 0.02
-pid_coeff_min_step: float = 1
+p_enable = 1
+
+pid_coeff_p: float  = 0.1
+pid_coeff_p_min_step: float = 1
 
 x_calculated_p_error: float = 0
 y_calculated_p_error: float = 0
@@ -35,7 +37,11 @@ y_calculated_p_error: float = 0
 
 #integrator
 
-pid_coeff_i: float = 0.001
+i_enable = 1
+
+
+pid_coeff_i: float = 0.01
+pid_coeff_i_min_step: float = 1
 pid_coeff_i_max_limit: float = 5
 
 x_calculated_i_error: float = 0
@@ -56,10 +62,11 @@ y_i_integrator: float = 0
 
 def PID_UPDATE(x_cur, y_cur, x_tar, y_tar):
 
+    global p_enable
     global x_current, y_current, x_target, y_target, x_error, y_error, x_return, y_return
     global pid_coff_t_scale
-    global pid_coeff_p, pid_coeff_min_step, x_calculated_p_error, y_calculated_p_error
-    global pid_coeff_i, pid_coeff_i_max_limit, x_calculated_i_error, y_calculated_i_error, x_i_integrator, y_i_integrator
+    global p_enable, pid_coeff_p, pid_coeff_p_min_step, x_calculated_p_error, y_calculated_p_error
+    global i_enable, pid_coeff_i, pid_coeff_i_min_step, pid_coeff_i_max_limit, x_calculated_i_error, y_calculated_i_error, x_i_integrator, y_i_integrator
 
 
 
@@ -78,43 +85,73 @@ def PID_UPDATE(x_cur, y_cur, x_tar, y_tar):
     x_calculated_p_error = (x_error * pid_coeff_p)
     y_calculated_p_error = (y_error * pid_coeff_p) * pid_coff_t_scale
 
-    # if error is big add it to movement
-    if abs(x_calculated_p_error) >= pid_coeff_min_step:
-        x_return = x_current + x_calculated_p_error
+    # if P enable
+    if p_enable == 1:
+        # if error is big add it to movement
+        if abs(x_calculated_p_error) >= pid_coeff_p_min_step:
+            x_return = x_current + x_calculated_p_error
+        else:
+            x_return = x_current
+
+        if abs(y_calculated_p_error) >= pid_coeff_p_min_step:
+            y_return = y_current + y_calculated_p_error
+        else:
+            y_return = y_current
     else:
         x_return = x_current
-
-    if abs(y_calculated_p_error) >= pid_coeff_min_step:
-        y_return = y_current + y_calculated_p_error
-    else:
         y_return = y_current
+
 
 
     # Integrator regulator calculate error
     x_calculated_i_error = (x_error * pid_coeff_i) * pid_coff_t_scale
     y_calculated_i_error = (y_error * pid_coeff_i) * pid_coff_t_scale
 
+
     # Limit integrator
-    if abs(x_i_integrator + x_calculated_i_error) < pid_coeff_i_max_limit:
-        x_i_integrator = x_i_integrator + x_calculated_i_error
-    
-    if abs(y_i_integrator + y_calculated_i_error) < pid_coeff_i_max_limit:
-        y_i_integrator = y_i_integrator + y_calculated_i_error
+    x_i_integrator += x_calculated_i_error
+
+    if x_i_integrator > pid_coeff_i_max_limit:
+        x_i_integrator = pid_coeff_i_max_limit
+    elif x_i_integrator < -pid_coeff_i_max_limit:
+        x_i_integrator = -pid_coeff_i_max_limit
+
+    y_i_integrator += y_calculated_i_error
+
+    if y_i_integrator > pid_coeff_i_max_limit:
+        y_i_integrator = pid_coeff_i_max_limit
+    elif y_i_integrator < -pid_coeff_i_max_limit:
+        y_i_integrator = -pid_coeff_i_max_limit
+
 
 
     # If integrator error bigger than threshold add it to common error
-    #if abs(x_i_integrator) >= pid_coeff_min_step:
-        #x_return = x_return + x_i_integrator
-    
-    if abs(y_i_integrator) >= pid_coeff_min_step:
-        y_return += pid_coeff_min_step
-        y_i_integrator -= pid_coeff_min_step
+    if i_enable == 1:
+        if abs(x_i_integrator) >= pid_coeff_i_min_step:
+            if x_i_integrator > 0:
+                x_return += pid_coeff_i_min_step
+                x_i_integrator -= pid_coeff_i_min_step
+            else:
+                x_return -= pid_coeff_i_min_step
+                x_i_integrator += pid_coeff_i_min_step
+
+        if abs(y_i_integrator) >= pid_coeff_i_min_step:
+            if y_i_integrator > 0:
+                y_return += pid_coeff_i_min_step
+                y_i_integrator -= pid_coeff_i_min_step
+            else:
+                y_return -= pid_coeff_i_min_step
+                y_i_integrator += pid_coeff_i_min_step
+
+
+
+
 
 
 
     # Print the 6 parameters to the console
     print(f"PID_UPDATE:"
-          f" xC {x_current:.2f}, yC {y_current:.2f}, xT {x_target:.2f}, yT {y_target:.2f},"
+    #      f" xC {x_current:.2f}, yC {y_current:.2f}, xT {x_target:.2f}, yT {y_target:.2f},"
           f" xE {x_error:.2f}, yE {y_error:.2f},"
     #      f" xPer {x_calculated_p_error:.2f}, yPer {y_calculated_p_error:.2f},"
           f" xIer {x_calculated_i_error:.2f}, yIer {y_calculated_i_error:.2f}"
