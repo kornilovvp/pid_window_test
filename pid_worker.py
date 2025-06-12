@@ -24,6 +24,13 @@ y_error: float = 0
 pid_coff_t_scale: float = 1
 
 
+#acceptable errors
+acceptable_error_x: float = 20
+acceptable_error_y: float = 20
+
+
+
+
 #proportional
 
 p_enable = 1
@@ -61,10 +68,10 @@ y_i_integrator: float = 0
 
 
 def PID_UPDATE(x_cur, y_cur, x_tar, y_tar):
-
-    global p_enable
-    global x_current, y_current, x_target, y_target, x_error, y_error, x_return, y_return
+ 
     global pid_coff_t_scale
+    global acceptable_error_x, acceptable_error_y
+    global x_current, y_current, x_target, y_target, x_error, y_error, x_return, y_return
     global p_enable, pid_coeff_p, pid_coeff_p_min_step, x_calculated_p_error, y_calculated_p_error
     global i_enable, pid_coeff_i, pid_coeff_i_min_step, pid_coeff_i_max_limit, x_calculated_i_error, y_calculated_i_error, x_i_integrator, y_i_integrator
 
@@ -81,9 +88,20 @@ def PID_UPDATE(x_cur, y_cur, x_tar, y_tar):
     x_error = x_tar - x_cur
     y_error = y_tar - y_cur
 
+    # check if located inside range acceptable error
+    if abs(x_error) < acceptable_error_x :
+        x_error  = 0
+
+    if abs(y_error) < acceptable_error_y :
+        y_error  = 0
+
+
+
+
     # Proportional regulator calculate error
     x_calculated_p_error = (x_error * pid_coeff_p)
     y_calculated_p_error = (y_error * pid_coeff_p) * pid_coff_t_scale
+
 
     # if P enable
     if p_enable == 1:
@@ -108,15 +126,17 @@ def PID_UPDATE(x_cur, y_cur, x_tar, y_tar):
     y_calculated_i_error = (y_error * pid_coeff_i) * pid_coff_t_scale
 
 
-    # Limit integrator
+    # Integrator calculation
     x_i_integrator += x_calculated_i_error
+    y_i_integrator += y_calculated_i_error
 
+
+    # Limit integrator
     if x_i_integrator > pid_coeff_i_max_limit:
         x_i_integrator = pid_coeff_i_max_limit
     elif x_i_integrator < -pid_coeff_i_max_limit:
         x_i_integrator = -pid_coeff_i_max_limit
 
-    y_i_integrator += y_calculated_i_error
 
     if y_i_integrator > pid_coeff_i_max_limit:
         y_i_integrator = pid_coeff_i_max_limit
