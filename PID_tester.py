@@ -46,8 +46,9 @@ class MovableCirclesApp:
         self.canvas.place(x=self.pad_x, y=self.pad_y)
 
         # Circle properties
-        self.circle_radius = 20
+        self.circle_radius = 10 # Made circles 2 times smaller
         self.green_color = "green"
+        self.rect_half_size = 25 # For a 50x50 rectangle
         self.blue_color = "blue"
 
         # Create green circle (center of working area)
@@ -58,14 +59,21 @@ class MovableCirclesApp:
             gc_center_x + self.circle_radius, gc_center_y + self.circle_radius,
             fill=self.green_color, outline=self.green_color, tags="green_circle"
         )
+        # Create transparent green rectangle around the green circle
+        self.green_rectangle = self.canvas.create_rectangle(
+            gc_center_x - self.rect_half_size, gc_center_y - self.rect_half_size,
+            gc_center_x + self.rect_half_size, gc_center_y + self.rect_half_size,
+            outline=self.green_color, width=2, fill="" # Transparent fill
+        )
+
 
         # Get initial coordinates for the blue circle from PID_UPDATE
         # We need the green circle's initial position to pass to PID_UPDATE
         initial_gc_x, initial_gc_y = self._get_circle_center_coords(self.green_circle)
         
-        # Initialize blue circle at canvas (0,0)
-        bc_center_x = 0
-        bc_center_y = 0
+        # Initialize blue circle at canvas bottom-middle
+        bc_center_x = self.canvas_width / 2
+        bc_center_y = self.canvas_height # Center of circle at bottom edge
 
         self.blue_circle = self.canvas.create_oval(
             bc_center_x - self.circle_radius, bc_center_y - self.circle_radius,
@@ -120,22 +128,48 @@ class MovableCirclesApp:
         # Get current green circle coordinates
         green_x, green_y = self._get_circle_center_coords(self.green_circle)
 
+        # Get current blue circle coordinates
         blue_x, blue_y = self._get_circle_center_coords(self.blue_circle)
 
-        # Get target blue circle coordinates from PID_UPDATE
+        # Calculate new target coordinates for the blue circle using PID_UPDATE
         new_blue_center_x, new_blue_center_y = PID_UPDATE(blue_x, blue_y, green_x, green_y) # Pass 4 args
 
-        # Update blue circle's position on the canvas
+        # --- Order of drawing/updating canvas items ---
+
+        # 1. Update blue circle's position on the canvas (call self.canvas.coords for blue circle)
+        # This is the "first" drawing action for the PID-controlled element.
         bx1 = new_blue_center_x - self.circle_radius
         by1 = new_blue_center_y - self.circle_radius
         bx2 = new_blue_center_x + self.circle_radius
         by2 = new_blue_center_y + self.circle_radius
         self.canvas.coords(self.blue_circle, bx1, by1, bx2, by2)
+        self.canvas.tag_raise(self.blue_circle) # Ensure blue circle is visually on top if it overlaps
 
-        self._update_coordinate_labels() # Update displayed coordinates
-        # Update error display by calling PID_GET_ERROR
-        X_err, Y_err = PID_GET_ERROR()
-        self.error_coord_var.set(f"Error: X_err={X_err}  Y_err={Y_err}")
+        # 2. Regarding "then call for the green circle":
+        # The green circle's position serves as the target for the PID controller.
+        # Its coordinates were read above (green_x, green_y).
+        # It is updated by user interaction (dragging), not by this PID loop changing its coordinates.
+        # Therefore, self.canvas.coords() is not called here to *change* the green circle's position.
+
+        # Update green circle's position on the canvas (re-asserting its current position)
+        # The green_x, green_y variables were read at the beginning of this method.
+        gx1_current = green_x - self.circle_radius
+        gy1_current = green_y - self.circle_radius
+        gx2_current = green_x + self.circle_radius
+        gy2_current = green_y + self.circle_radius
+        self.canvas.coords(self.green_circle, gx1_current, gy1_current, gx2_current, gy2_current)
+        # Update green rectangle's position to match the green circle
+        rect_x1 = green_x - self.rect_half_size
+        rect_y1 = green_y - self.rect_half_size
+        rect_x2 = green_x + self.rect_half_size
+        rect_y2 = green_y + self.rect_half_size
+        self.canvas.coords(self.green_rectangle, rect_x1, rect_y1, rect_x2, rect_y2)
+
+        # Ensure green circle has top visual priority
+        self.canvas.tag_raise(self.green_circle) # This will draw the circle on top of the rectangle
+
+        # Update all coordinate and error labels
+        self._update_coordinate_labels() # This method already updates the error display
 
         self.master.after(33, self._run_pid_loop) # Schedule the next call
 
@@ -177,6 +211,8 @@ class MovableCirclesApp:
 
             # Move the circle by the (potentially adjusted) dx, dy
             self.canvas.move(self._drag_data["item"], dx, dy)
+            # Move the associated rectangle
+            self.canvas.move(self.green_rectangle, dx, dy)
 
             # Update the last mouse position for the next drag event
             self._drag_data["x"] = event.x
@@ -184,6 +220,9 @@ class MovableCirclesApp:
 
             # Update coordinate display
             self._update_coordinate_labels()
+
+            # Ensure the green circle stays on top during drag
+            self.canvas.tag_raise(self.green_circle)
 
     def _on_green_release(self, event):
         """Handles mouse button release."""
